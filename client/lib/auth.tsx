@@ -8,20 +8,30 @@ import {
 } from "react";
 
 export interface AuthUser {
+  id?: string;
   email: string;
   fullName: string;
-  role: "user";
+  role: "user" | "helper";
+  familyCode?: string;
+  shareCode?: string; // Unique shareable code for this user
+  homeLocation?: { lat: number; lng: number };
+  currentLocation?: { lat: number; lng: number };
+  isInsideGeofence?: boolean;
+  helperAccessCodes?: string[]; // Codes this helper has access to
 }
 
 interface LoginPayload {
   email: string;
   password: string;
+  role?: "user" | "helper";
 }
 
 interface SignupPayload {
   email: string;
   fullName: string;
   password: string;
+  role?: "user" | "helper";
+  familyCode?: string;
 }
 
 interface AuthContextValue {
@@ -44,6 +54,10 @@ function buildNameFromEmail(email: string) {
     .filter(Boolean)
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
+}
+
+function generateShareCode(): string {
+  return Math.random().toString(36).substring(2, 10).toUpperCase();
 }
 
 function saveUser(user: AuthUser | null) {
@@ -86,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       isReady,
       user,
-      login: ({ email, password }) => {
+      login: ({ email, password, role = "user" }) => {
         const normalizedEmail = email.trim().toLowerCase();
 
         if (!normalizedEmail || !password.trim()) {
@@ -94,16 +108,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const nextUser: AuthUser = {
+          id: `user_${Date.now()}`,
           email: normalizedEmail,
           fullName: buildNameFromEmail(normalizedEmail),
-          role: "user",
+          role: role,
+          shareCode: role === "user" ? generateShareCode() : undefined,
         };
 
         setUser(nextUser);
         saveUser(nextUser);
         return nextUser;
       },
-      signup: ({ email, fullName, password }) => {
+      signup: ({ email, fullName, password, role = "user", familyCode }) => {
         const normalizedEmail = email.trim().toLowerCase();
         const normalizedName = fullName.trim();
 
@@ -112,9 +128,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const nextUser: AuthUser = {
+          id: `user_${Date.now()}`,
           email: normalizedEmail,
           fullName: normalizedName,
-          role: "user",
+          role: role,
+          familyCode: familyCode,
+          shareCode: role === "user" ? generateShareCode() : undefined,
+          helperAccessCodes: role === "helper" ? [] : undefined,
         };
 
         setUser(nextUser);

@@ -9,12 +9,16 @@ import {
   Radio,
   ScanSearch,
   Sparkles,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
+import LocationMap from "@/components/LocationMap";
 import { useAuth } from "@/lib/auth";
 import type { CurrencyDetectionResponse, ObjectDetectionResponse, Detection } from "@shared/api";
+import { useUpdateLocation, useSetHomeLocation, useGeofenceStatus, useAutoLocationTracking, useUserLiveLocation } from "@/hooks/use-location";
 
 declare global {
   interface Window {
@@ -87,6 +91,34 @@ export default function UserDashboard() {
   const previewImageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Location hooks
+  const { updateLocation } = useUpdateLocation();
+  const { setHomeLocation } = useSetHomeLocation();
+  const { isInsideGeofence, homeLocation } = useGeofenceStatus(user?.id);
+  const { liveLocation } = useUserLiveLocation(user?.id); // Get live updates every 2 seconds
+  useAutoLocationTracking(user?.id, user?.familyCode); // Auto-track location every 10 seconds
+  const currentLocation = liveLocation?.currentLocation;
+  const [isSettingHome, setIsSettingHome] = useState(false);
+  const [showManualLocation, setShowManualLocation] = useState(false);
+  const [manualLat, setManualLat] = useState("");
+  const [manualLng, setManualLng] = useState("");
+
+  // Register user in the system when they load the dashboard
+  useEffect(() => {
+    if (user?.id && user?.email && user?.shareCode && user?.role === "user") {
+      fetch("/api/location/register-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          email: user.email,
+          shareCode: user.shareCode,
+          familyCode: user.familyCode,
+        }),
+      });
+    }
+  }, [user?.id, user?.email, user?.shareCode]);
 
   useEffect(() => {
     if (!selectedFile) {
@@ -192,6 +224,92 @@ export default function UserDashboard() {
     if (window.speechRecognition) {
       window.speechRecognition.stop();
       window.speechRecognition = null;
+    }
+  }
+
+  async function handleSetHomeLocation() {
+    setIsSettingHome(true);
+    setErrorMessage("");
+    
+    try {
+      // Try using geolocation
+      if (navigator.geolocation) {
+        const position = await new Promise<GeolocationCoordinates>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve(pos.coords),
+            (err) => reject(err),
+            { timeout: 5000, enableHighAccuracy: false }
+          );
+        });
+
+        if (user?.id) {
+          await setHomeLocation(user.id, position.latitude, position.longitude);
+          setErrorMessage("");
+          console.log("[UserDashboard] Home location set successfully via GPS");
+        }
+      } else {
+        throw new Error("Geolocation not supported");
+      }
+    } catch (error) {
+      console.log("[UserDashboard] Geolocation failed, showing manual input");
+      setShowManualLocation(true);
+    } finally {
+      setIsSettingHome(false);
+    }
+  }
+
+  async function handleSetManualLocation() {
+    if (!manualLat || !manualLng) {
+      setErrorMessage("Please enter both latitude and longitude");
+      return;
+    }
+
+    const lat = parseFloat(manualLat);
+    const lng = parseFloat(manualLng);
+
+    if (isNaN(lat) || isNaN(lng)) {
+      setErrorMessage("Invalid coordinates. Please enter valid numbers.");
+      return;
+    }
+
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setErrorMessage("Invalid coordinates range. Latitude: -90 to 90, Longitude: -180 to 180");
+      return;
+    }
+
+    try {
+      if (user?.id) {
+        await setHomeLocation(user.id, lat, lng);
+        setErrorMessage("");
+        setManualLat("");
+        setManualLng("");
+        setShowManualLocation(false);
+        console.log("[UserDashboard] Home location set successfully via manual input");
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Failed to set home location";
+      setErrorMessage(errorMsg);
+      console.error("[UserDashboard] Error setting location:", error);
+    }
+  }
+
+  async function handleSetDefaultLocation() {
+    // Default location (New York)
+    const defaultLat = 40.7128;
+    const defaultLng = -74.006;
+
+    try {
+      if (user?.id) {
+        await setHomeLocation(user.id, defaultLat, defaultLng);
+        setErrorMessage("");
+        setShowManualLocation(false);
+        setManualLat("");
+        setManualLng("");
+        console.log("[UserDashboard] Home location set to default (New York)");
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Failed to set home location";
+      setErrorMessage(errorMsg);
     }
   }
 
@@ -449,6 +567,149 @@ export default function UserDashboard() {
                 </button>
               </div>
             </div>
+          </section>
+
+          {/* Share Code Section */}
+          <section className="rounded-[2rem] border border-white/30 bg-white/35 p-6 shadow-[0_20px_60px_rgba(56,74,51,0.12)] backdrop-blur-sm sm:p-8">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="font-outfit text-2xl font-bold text-black sm:text-3xl">
+                  Share Code
+                </h2>
+                <p className="mt-2 font-outfit text-base text-black/70">
+                  Give this code to helpers so they can track your location
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="rounded-full bg-forest px-6 py-3 text-center">
+                  <p className="font-inter text-xs text-white/70 uppercase tracking-widest">
+                    Your Code
+                  </p>
+                  <p className="font-outfit text-2xl font-bold text-white tracking-widest">
+                    {user?.shareCode || "N/A"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    if (user?.shareCode) {
+                      navigator.clipboard.writeText(user.shareCode);
+                    }
+                  }}
+                  className="inline-flex items-center justify-center rounded-full border-2 border-forest px-4 py-3 font-outfit font-semibold text-forest transition-colors hover:bg-forest/10"
+                  title="Copy to clipboard"
+                >
+                  📋
+                </button>
+              </div>
+            </div>
+          </section>
+          <section className="rounded-[2rem] border border-white/30 bg-white/35 p-6 shadow-[0_20px_60px_rgba(56,74,51,0.12)] backdrop-blur-sm sm:p-8">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="font-outfit text-2xl font-bold text-black sm:text-3xl">
+                  Safe Zone Status
+                </h2>
+                <p className="mt-2 font-outfit text-base text-black/70">
+                  Monitor your location relative to your home zone
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+                <div className={`flex items-center gap-3 rounded-full px-4 py-3 ${
+                  isInsideGeofence
+                    ? "bg-green-100 text-green-700"
+                    : "bg-red-100 text-red-700"
+                }`}>
+                  {isInsideGeofence ? (
+                    <>
+                      <CheckCircle2 className="h-5 w-5" />
+                      <span className="font-outfit font-semibold">Inside Safe Zone ✅</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertCircle className="h-5 w-5" />
+                      <span className="font-outfit font-semibold">Outside Safe Zone 🚨</span>
+                    </>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleSetHomeLocation}
+                  disabled={isSettingHome}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-forest px-6 py-3 font-outfit text-base font-semibold text-white transition-colors hover:bg-forest/90 disabled:opacity-50"
+                >
+                  <MapPinned className="h-4 w-4" />
+                  {isSettingHome ? "Setting..." : "Set Current as Home"}
+                </button>
+              </div>
+
+              {/* Manual Location Input */}
+              {showManualLocation && (
+                <div className="mt-6 space-y-4 rounded-lg border-2 border-blue-300 bg-blue-50 p-4">
+                  <div>
+                    <p className="font-semibold text-gray-700 mb-3">GPS unavailable. Set location manually:</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Latitude</label>
+                        <input
+                          type="number"
+                          step="0.0001"
+                          placeholder="e.g., 40.7128"
+                          value={manualLat}
+                          onChange={(e) => setManualLat(e.target.value)}
+                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Longitude</label>
+                        <input
+                          type="number"
+                          step="0.0001"
+                          placeholder="e.g., -74.006"
+                          value={manualLng}
+                          onChange={(e) => setManualLng(e.target.value)}
+                          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSetManualLocation}
+                      className="flex-1 rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                    >
+                      Save Location
+                    </button>
+                    <button
+                      onClick={handleSetDefaultLocation}
+                      className="flex-1 rounded bg-gray-400 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-500"
+                    >
+                      Use Default (NY)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowManualLocation(false);
+                        setManualLat("");
+                        setManualLng("");
+                      }}
+                      className="flex-1 rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Location Map Section */}
+          <section className="rounded-[2rem] border border-white/30 bg-white/35 p-6 shadow-[0_20px_60px_rgba(56,74,51,0.12)] backdrop-blur-sm sm:p-8">
+            <LocationMap
+              homeLocation={homeLocation}
+              currentLocation={currentLocation}
+              isInsideGeofence={isInsideGeofence}
+            />
           </section>
 
           <section className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">

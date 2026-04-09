@@ -29,3 +29,82 @@ export interface Detection {
 export interface ObjectDetectionResponse {
   detections: Detection[];
 }
+
+// ============= Location & Geofencing Types =============
+
+export interface Location {
+  lat: number;
+  lng: number;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  fullName: string;
+  role: "user" | "helper";
+  familyCode?: string;
+  shareCode?: string; // Unique code for sharing access with helpers
+  homeLocation?: Location;
+  currentLocation?: Location;
+  isInsideGeofence?: boolean;
+}
+
+export interface LocationUpdatePayload {
+  lat: number;
+  lng: number;
+}
+
+export interface LocationUpdateResponse {
+  success: boolean;
+  userId: string;
+  currentLocation: Location;
+  isInsideGeofence: boolean;
+}
+
+export interface SetHomeLocationPayload {
+  lat: number;
+  lng: number;
+}
+
+export interface GeofenceStatus {
+  userId: string;
+  isInsideGeofence: boolean;
+  distanceFromHome?: number;
+}
+
+// WebSocket event types
+export interface LocationUpdateEvent {
+  userId: string;
+  lat: number;
+  lng: number;
+  isInsideGeofence: boolean;
+  timestamp: number;
+}
+
+// Helper-User Pairing
+export interface HelperPairingPayload {
+  userShareCode: string;
+}
+
+export interface HelperPairingResponse {
+  success: boolean;
+  message: string;
+  user?: {
+    id: string;
+    email: string;
+    fullName: string;
+    shareCode: string;
+  };
+}
+
+export interface HelperAccessList {
+  success: boolean;
+  accessibleUsers: Array<{
+    id: string;
+    email: string;
+    fullName: string;
+    currentLocation?: Location;
+    homeLocation?: Location;
+    isInsideGeofence: boolean;
+  }>;
+}

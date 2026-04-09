@@ -17,6 +17,7 @@ export default function AuthPage({ mode }: AuthPageProps) {
   const [signupName, setSignupName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
+  const [signupFamilyCode, setSignupFamilyCode] = useState("");
   const [loginError, setLoginError] = useState("");
   const [signupError, setSignupError] = useState("");
 
@@ -46,15 +47,14 @@ export default function AuthPage({ mode }: AuthPageProps) {
   function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!isUser) {
-      setLoginError("Helper dashboard wiring has not been added yet.");
-      return;
-    }
-
     try {
-      login({ email: loginEmail, password: loginPassword });
+      login({
+        email: loginEmail,
+        password: loginPassword,
+        role: isUser ? "user" : "helper",
+      });
       setLoginError("");
-      navigate(redirectPath, { replace: true });
+      navigate(isUser ? redirectPath : "/helper/dashboard", { replace: true });
     } catch (error) {
       setLoginError(
         error instanceof Error ? error.message : "Unable to sign you in.",
@@ -65,8 +65,8 @@ export default function AuthPage({ mode }: AuthPageProps) {
   function handleSignupSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!isUser) {
-      setSignupError("Helper dashboard wiring has not been added yet.");
+    if (!isUser && !signupFamilyCode.trim()) {
+      setSignupError("Family code is required for helpers.");
       return;
     }
 
@@ -75,9 +75,11 @@ export default function AuthPage({ mode }: AuthPageProps) {
         email: signupEmail,
         fullName: signupName,
         password: signupPassword,
+        role: isUser ? "user" : "helper",
+        familyCode: signupFamilyCode || undefined,
       });
       setSignupError("");
-      navigate("/dashboard", { replace: true });
+      navigate(isUser ? "/dashboard" : "/helper/dashboard", { replace: true });
     } catch (error) {
       setSignupError(
         error instanceof Error ? error.message : "Unable to create your account.",
@@ -222,6 +224,23 @@ export default function AuthPage({ mode }: AuthPageProps) {
                     className="w-full rounded-2xl border border-forest/20 bg-white/80 px-4 py-3 font-inter text-base text-black placeholder:text-black/35 outline-none focus:border-forest focus:ring-2 focus:ring-forest/20"
                   />
                 </label>
+                {!isUser && (
+                  <label className="block">
+                    <span className="mb-2 block font-inter text-sm text-black/70">
+                      Family Code
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Enter family code"
+                      value={signupFamilyCode}
+                      onChange={(event) => setSignupFamilyCode(event.target.value)}
+                      className="w-full rounded-2xl border border-forest/20 bg-white/80 px-4 py-3 font-inter text-base text-black placeholder:text-black/35 outline-none focus:border-forest focus:ring-2 focus:ring-forest/20"
+                    />
+                    <p className="mt-1 font-inter text-xs text-black/60">
+                      Helper must use the same family code as protected users
+                    </p>
+                  </label>
+                )}
                 {signupError ? (
                   <p className="font-inter text-sm text-red-700">{signupError}</p>
                 ) : null}

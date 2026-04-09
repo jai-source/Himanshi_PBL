@@ -15,6 +15,7 @@ import UserApp from "./pages/UserApp";
 import UserDashboard from "./pages/UserDashboard";
 import VoiceDetection from "./pages/VoiceDetection";
 import Helper from "./pages/Helper";
+import HelperDashboard from "./pages/HelperDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +49,14 @@ const App = () => (
               }
             />
             <Route path="/helper" element={<Helper />} />
+            <Route
+              path="/helper/dashboard"
+              element={
+                <ProtectedRoute>
+                  <HelperDashboard />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/voice"
               element={
