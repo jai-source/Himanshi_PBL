@@ -10,3 +10,22 @@
 export interface DemoResponse {
   message: string;
 }
+
+export interface CurrencyDetectionResponse {
+  note: string;
+  confidence: number;
+  status: string;
+  matchedTemplate: string | null;
+  goodMatches: number;
+  detections?: Detection[];
+}
+
+export interface Detection {
+  label: string;
+  confidence: number;
+  box: [number, number, number, number]; // [x1, y1, x2, y2]
+}
+
+export interface ObjectDetectionResponse {
+  detections: Detection[];
+}

@@ -13,6 +13,7 @@ import About from "./pages/About";
 import Accessibility from "./pages/Accessibility";
 import UserApp from "./pages/UserApp";
 import UserDashboard from "./pages/UserDashboard";
+import VoiceDetection from "./pages/VoiceDetection";
 import Helper from "./pages/Helper";
 import NotFound from "./pages/NotFound";
 
@@ -47,6 +48,14 @@ const App = () => (
               }
             />
             <Route path="/helper" element={<Helper />} />
+            <Route
+              path="/voice"
+              element={
+                <ProtectedRoute>
+                  <VoiceDetection />
+                </ProtectedRoute>
+              }
+            />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

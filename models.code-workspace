@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"name": "models",
+			"path": "../../currencyd/Indian-Currency-Detection/models"
+		},
+		{
+			"name": "detectify-frontend-main",
+			"path": "."
+		},
+		{
+			"name": "utils",
+			"path": "../../currencyd/Indian-Currency-Detection/utils"
+		}
+	],
+	"settings": {}
+}
