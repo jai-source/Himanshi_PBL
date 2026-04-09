@@ -89,7 +89,15 @@ function runBridge(imagePath: string, modelPath: string, isCurrency: boolean) {
         }
 
         try {
-          resolve(JSON.parse(stdout) as CurrencyDetectionResponse | ObjectDetectionResponse);
+          const cleaned = stdout
+            .trim()
+            .split(/\r?\n/)
+            .filter((line) => line.trim().length > 0)
+            .pop();
+          if (!cleaned) {
+            throw new Error("The Python bridge returned no output.");
+          }
+          resolve(JSON.parse(cleaned) as CurrencyDetectionResponse | ObjectDetectionResponse);
         } catch (parseError) {
           const detail = stderr?.trim() || stdout?.trim() || String(parseError);
           reject(

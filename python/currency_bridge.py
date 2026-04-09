@@ -8,14 +8,8 @@ import numpy as np
 import torch
 from PIL import Image
 
-# Add repository root to Python path so the local YOLOv5 code is used
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))
-
-from models.common import DetectMultiBackend
-from utils.general import (check_img_size, letterbox, non_max_suppression, scale_boxes)
-from utils.torch_utils import select_device
+# Use ultralytics YOLO instead of local code
+from ultralytics import YOLO
 
 
 def normalize_label(raw_label):
@@ -30,43 +24,35 @@ def normalize_label(raw_label):
 
 
 def detect_objects(image_path: str, model_path: str, is_currency=False):
-    global device
-    device = select_device("")
-    model = DetectMultiBackend(model_path, device=device, dnn=False, data=None, fp16=False)
-    stride, names = model.stride, model.names
-    imgsz = check_img_size((640, 640), s=stride)
-
-    image = Image.open(image_path).convert("RGB")
-    original_shape = image.size[::-1]  # (height, width)
-    image = np.asarray(image)[:, :, ::-1]  # RGB to BGR
-    image = np.ascontiguousarray(image)
-    image = letterbox(image, imgsz, stride=stride, auto=True)[0]
-    image = image.transpose((2, 0, 1))[None]
-    image = np.ascontiguousarray(image)
-    im = torch.from_numpy(image).to(device).float() / 255.0
-
-    if im.ndimension() == 3:
-        im = im.unsqueeze(0)
-
-    with torch.no_grad():
-        pred = model(im)
-
-    pred = non_max_suppression(pred, 0.25, 0.45, max_det=1000)[0]
-
+    model = YOLO(model_path)
+    
+    results = model.predict(
+        image_path,
+        conf=0.25,
+        iou=0.45,
+        max_det=1000,
+        verbose=False,
+        show=False,
+        save=False,
+    )
+    
     detections = []
-    if pred is not None and len(pred):
-        pred[:, :4] = scale_boxes(im.shape[2:], pred[:, :4], original_shape).round()
-        for *xyxy, conf, cls in pred.tolist():
-            class_index = int(cls)
-            label = names[class_index]
-            if is_currency:
-                label = normalize_label(label)
-            detections.append({
-                "label": label,
-                "confidence": round(float(conf) * 100, 1),
-                "box": [float(xyxy[0]), float(xyxy[1]), float(xyxy[2]), float(xyxy[3])],
-            })
-
+    for result in results:
+        boxes = result.boxes
+        if boxes is not None:
+            for box in boxes:
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                conf = box.conf[0].cpu().numpy()
+                cls = int(box.cls[0].cpu().numpy())
+                label = result.names[cls] if result.names else str(cls)
+                if is_currency:
+                    label = normalize_label(label)
+                detections.append({
+                    "label": label,
+                    "confidence": round(float(conf) * 100, 1),
+                    "box": [float(x1), float(y1), float(x2), float(y2)]
+                })
+    
     if is_currency:
         if not detections:
             return {

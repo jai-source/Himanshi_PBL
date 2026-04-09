@@ -82,7 +82,9 @@ export default function UserDashboard() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [liveDetections, setLiveDetections] = useState<Detection[]>([]);
+  const [currencyDetections, setCurrencyDetections] = useState<Detection[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const previewImageRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -108,6 +110,12 @@ export default function UserDashboard() {
 
     return () => stopCamera();
   }, [isCameraActive]);
+
+  useEffect(() => {
+    if (previewUrl && currencyDetections.length) {
+      drawDetections(currencyDetections);
+    }
+  }, [previewUrl, currencyDetections]);
 
   useEffect(() => {
     if (isListening) {
@@ -233,26 +241,42 @@ export default function UserDashboard() {
   function drawDetections(detections: Detection[]) {
     const canvas = canvasRef.current;
     const video = videoRef.current;
-    if (!canvas || !video) return;
+    const previewImage = previewImageRef.current;
+    if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    const sourceWidth = video?.videoWidth || previewImage?.naturalWidth || 0;
+    const sourceHeight = video?.videoHeight || previewImage?.naturalHeight || 0;
+    const displayWidth = video?.clientWidth || previewImage?.clientWidth || 0;
+    const displayHeight = video?.clientHeight || previewImage?.clientHeight || 0;
+    if (!sourceWidth || !sourceHeight || !displayWidth || !displayHeight) return;
+
+    canvas.width = displayWidth;
+    canvas.height = displayHeight;
+
+    const scaleX = displayWidth / sourceWidth;
+    const scaleY = displayHeight / sourceHeight;
 
     // Clear previous drawings
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     detections.forEach(detection => {
       const [x1, y1, x2, y2] = detection.box;
-      ctx.strokeStyle = detection.label.toLowerCase().includes('person') ? '#00ff00' : '#ff0000';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      const strokeColor = '#1f7a1f';
+      const dx1 = x1 * scaleX;
+      const dy1 = y1 * scaleY;
+      const dx2 = x2 * scaleX;
+      const dy2 = y2 * scaleY;
 
-      ctx.fillStyle = detection.label.toLowerCase().includes('person') ? '#00ff00' : '#ff0000';
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(dx1, dy1, dx2 - dx1, dy2 - dy1);
+
+      ctx.fillStyle = strokeColor;
       ctx.font = '16px Arial';
-      ctx.fillText(`${detection.label} ${detection.confidence}%`, x1, y1 - 5);
+      ctx.fillText(`${detection.label} ${detection.confidence}%`, dx1, dy1 - 6);
     });
   }
 
@@ -321,6 +345,8 @@ export default function UserDashboard() {
 
       const result = payload as CurrencyDetectionResponse;
       setDetectionResult(result);
+      setCurrencyDetections(result.detections ?? []);
+      drawDetections(result.detections ?? []);
       speakResult(result);
     } catch (error) {
       const message =
@@ -340,6 +366,7 @@ export default function UserDashboard() {
 
     if (file) {
       setDetectionResult(initialDetection);
+      setCurrencyDetections([]);
       setIsCameraActive(false); // Switch to file mode
     }
   }
@@ -464,7 +491,7 @@ export default function UserDashboard() {
                           <div className="relative flex h-44 w-full max-w-[26rem] items-center justify-center overflow-hidden rounded-[1.5rem] border-2 border-white/70 bg-white/20 sm:h-56">
                             <div className="absolute inset-4 rounded-[1.2rem] border-2 border-dashed border-forest/45" />
                             {isCameraActive ? (
-                              <div className="relative">
+                              <>
                                 <video
                                   ref={videoRef}
                                   autoPlay
@@ -476,13 +503,25 @@ export default function UserDashboard() {
                                   ref={canvasRef}
                                   className="absolute inset-0 h-full w-full pointer-events-none"
                                 />
-                              </div>
+                              </>
                             ) : previewUrl ? (
-                              <img
-                                src={previewUrl}
-                                alt="Selected currency note preview"
-                                className="h-full w-full object-cover"
-                              />
+                              <>
+                                <img
+                                  ref={previewImageRef}
+                                  src={previewUrl}
+                                  alt="Selected currency note preview"
+                                  className="h-full w-full object-cover"
+                                  onLoad={() => {
+                                    if (currencyDetections.length) {
+                                      drawDetections(currencyDetections);
+                                    }
+                                  }}
+                                />
+                                <canvas
+                                  ref={canvasRef}
+                                  className="absolute inset-0 h-full w-full pointer-events-none"
+                                />
+                              </>
                             ) : (
                               <div className="rounded-full bg-white/85 p-5 text-forest shadow-lg">
                                 <ImagePlus className="h-10 w-10 sm:h-12 sm:w-12" />
